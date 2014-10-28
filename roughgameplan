@@ -74,7 +74,7 @@ int main(int argc, char * argv[]) {
     }
 
     if (event.eventtype == MinetEvent::Timeout) {
-	  //COREY, MAYBE MIGUEL, DEPENDS? LET'S SEE: NOT NECESSARY YET
+	  //LET'S SEE: NOT NECESSARY YET
 	  //Loop through clist
     
       // timeout ! probably need to resend some packets
