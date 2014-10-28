@@ -1,0 +1,101 @@
+//Rough Plan
+
+int main(int argc, char * argv[]) {
+  MinetHandle mux;
+  MinetHandle sock;
+   
+  ConnectionList<TCPState> clist;
+
+  while (MinetGetNextEvent(event, timeout) == 0) {
+   
+    if ((event.eventtype == MinetEvent::Dataflow) &&
+        (event.direction == MinetEvent::IN)) {
+      
+	  
+	 //MIGUEL:
+	 if (event.handle == mux) {
+        // ip packet has arrived!
+	 MinetReceive(mux,p);
+	 
+	 //Parse packet, 
+	 
+   
+     ConnectionList<TCPState>::iterator cs = clist.FindMatching(c);
+	 State = cs->state.GetState();
+	 
+	 case CLOSED:     = 0
+     case LISTEN:     = 1
+	 case SYN_RCVD:   = 2
+	 case SYN_SENT    = 3
+	 case SYN_SENT1   = 4
+	 case ESTABLISHED = 5
+	 case SEND_DATA   = 6
+	 case CLOSE_WAIT  = 7
+	 case FIN_WAIT1   = 8
+	 case CLOSING     = 9
+	 case LAST_ACK    = 10
+	 case FIN_WAIT2   = 11
+	 case TIME_WAIT   = 12 
+	 
+	 //In each above case: 
+	 //make packet
+	 //send packets
+	 //set new state. 
+	 //If we get last_ack from close, or other close conditions, kill connection
+	 
+	//COREY:
+      if (event.handle == sock) {
+        // socket request or response has arrived
+	  SockRequestResponse req;
+	  MinetReceive(sock,req);
+	  ConnectionList<TCPState>::iterator cs = clist.FindMatching(req.connection);
+	  
+	  //NOTE: Not 100% on which connection states make sense for new/old/whatever, you'll need to figure this out
+	  //New connection?:
+	  case CONNECT:
+	  case ACCEPT:
+	  case STATUS:
+	  case WRITE:
+	  case FORWARD:
+	  case CLOSE:
+	  //Probably end up making new connections in some of the above
+	  
+	  //Old connection?:
+	  case CONNECT:
+	  case ACCEPT:
+	  case STATUS:
+	  case WRITE:
+	  case FORWARD:
+	  case CLOSE:
+	  //Probably end up modifying connections in the above
+	  
+      }
+  
+    }
+
+    if (event.eventtype == MinetEvent::Timeout) {
+	  //COREY, MAYBE MIGUEL, DEPENDS? LET'S SEE: NOT NECESSARY YET
+	  //Loop through clist
+    
+      // timeout ! probably need to resend some packets
+      // Probably might need to do some stuff here too (close connections that timeout, etc)
+	  // Not yet sure which cases need to be handled
+	  case SYN_RCVD:
+	  case SYN_SENT
+	  case SYN_RCVD
+	  case ESTABLISHED
+	  case SEND_DATA   
+	  case CLOSE_WAIT  
+	  case FIN_WAIT1   
+	  case CLOSING     
+	  case LAST_ACK    
+	  case FIN_WAIT2   
+	  case TIME_WAIT   
+    }
+
+  }
+
+  MinetDeinit();
+
+  return 0;
+}
