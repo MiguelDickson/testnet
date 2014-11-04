@@ -15,6 +15,9 @@
 #include "tcpstate.h"
 #include "constate.h"
 #include "tcp.h"
+#include <time.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 
 using namespace std;
@@ -87,7 +90,16 @@ void analyze_packet (Packet p)
             }
             else
             {
-            cerr << "\n Some other kind of packet!\n";
+                if (IS_FIN(flags))
+                {
+                cerr << "\n FIN received! " << endl << "\nThe seqnum is:" << seqnum << "\nThe acknum is:" << acknum << endl;
+                cerr << "\nThe source port is:\n" << srcport << endl << "\nThe dest prt is:\n" << destport << endl;
+                cerr << "\nThe source IP is:\n" << source << endl << "\nThe dest IP is :\n" << destination << "\nThe rest of the packet is:" << p << endl;     
+                }           
+                else
+                {
+                cerr << "\n Some other kind of packet!\n";
+                }
             }         
            
         }
@@ -98,11 +110,10 @@ void analyze_packet (Packet p)
 //Respond_packet derives the correct action from the connection and whether or not there is data to be sent
 void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack)
 {
-    //Check whether or not you're sending data. Slightly different loop if so.
-    if (get_data == false)
-    {
-        cerr <<"\nHas no data to receive!\n";
+       
+        cerr <<"\nIn respond_packet!\n";
         Packet p;
+        Buffer b;
         int state;
         TCPHeader tcp_head;
         IPHeader ip_head;
@@ -135,7 +146,7 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 cerr << "\n Received a syn! Sending syn-ack!\n";
                 
                 //Set last bits of TCP Header
-                tcp_head.SetSeqNum(3333, p);
+                tcp_head.SetSeqNum(((rand()%50) +1) *3333, p);
                 tcp_head.SetAckNum(seq+1, p);
                 tcp_head.SetWinSize((unsigned short)5840, p);
                 tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
@@ -164,15 +175,27 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 if (IS_ACK(flags) && (!(IS_SYN(flags))))
                 {
                 cerr << "\n Received ACK! PROPERLY ESTABLISHED. \n";
-                tcp_head.SetSeqNum(seq, p);
-                tcp_head.SetAckNum(ack, p);
-                tcp_head.SetWinSize((unsigned short)5840, p);
-                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                //tcp_head.SetSeqNum(seq, p);
+                //tcp_head.SetAckNum(ack, p);
+                //tcp_head.SetWinSize((unsigned short)5840, p);
+                //tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
                 conn.state.SetState(ESTABLISHED);
-                conn.state.last_acked = conn.state.last_sent-1;
+                //conn.state.last_acked = conn.state.last_sent-1;
                 conn.bTmrActive = true;
                 conn.timeout=Time() + 60;
-                conn.state.SetLastRecvd(seq+1);                
+                conn.state.SetLastRecvd(seq+1);  
+                if (get_data == true)
+                    {
+                    char *bufstring;
+                    size_t size =0;
+                    unsigned offset =0;
+                    conn.state.RecvBuffer.GetData(bufstring, size, offset);
+                    cerr << "\n Writing the following buffer to socket!: " << *bufstring << "\n";  
+                        
+                    }
+                   
+                
+                
                 }
                  break;
             }    
@@ -188,21 +211,17 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 break;
         }
         
-    }
-    else
-    {
-    cerr <<"\nHas data to receive!\n";    
-    }
-
 } 
 
 
 
 int main(int argc, char * argv[]) {
+    
     MinetHandle mux;
     MinetHandle sock;
     ConnectionList<TCPState> clist;
 
+    srand(time(NULL));
     ///////////Pre-existing configuration code : DO NOT MODIFY
     MinetInit(MINET_TCP_MODULE);
     mux = MinetIsModuleInConfig(MINET_IP_MUX) ?  
@@ -327,11 +346,12 @@ int main(int argc, char * argv[]) {
                 has_data = false;
             else
                 {
+                current_conn.state.RecvBuffer = buf;
                 //Also add in here the buffering mechanisms into the connection's state
                 has_data = true;
                 }
                 
-            send_packet(current_conn, has_data, flags, mux, sock, seq, ack);    
+            respond_packet(current_conn, has_data, flags, mux, sock, seq, ack);    
             }
             
             
