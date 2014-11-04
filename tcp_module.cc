@@ -83,37 +83,85 @@ void analyze_packet (Packet p)
             cerr << "\n ACK received! " << endl << "\nThe seqnum is:" << seqnum << "\nThe acknum is:" << acknum << endl;
             cerr << "\nThe source port is:\n" << srcport << endl << "\nThe dest prt is:\n" << destport << endl;
              cerr << "\nThe source IP is:\n" << source << endl << "\nThe dest IP is :\n" << destination << "\nThe rest of the packet is:" << p << endl;     
-            }
+           }
+           
+           
+           
         }
 
 
 }
 
-//Send packet derives the correct action from the connection, whether or not there is data, and flags
-void send_packet (ConnectionToStateMapping<TCPState> &conn, bool has_data, char flags, MinetHandle mux)
+//Send packet derives the correct action from the connection and whether or not there is data to be sent
+void send_packet (ConnectionToStateMapping<TCPState> &conn, bool has_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack)
 {
     //Check whether or not you're sending data. Slightly different loop if so.
-    if (! has_data)
+    if (has_data == false)
     {
+        cerr <<"\nHas no data to send!\n";
         Packet p;
         int state;
         TCPHeader tcp_head;
         IPHeader ip_head;
+        
+        //Set the IP header
         ip_head.SetSourceIP(conn.connection.src);
         ip_head.SetDestIP(conn.connection.dest);
         ip_head.SetProtocol(IP_PROTO_TCP);  //Defined in tcp.h
         ip_head.SetTotalLength(TCP_HEADER_BASE_LENGTH + IP_HEADER_BASE_LENGTH); //Defined in tcp.h && ip.h
+        //Push the IP header
+        p.PushFrontHeader(ip_head);
+        
+        //Set parts of TCP header
         tcp_head.SetSourcePort(conn.connection.srcport, p);
         tcp_head.SetDestPort(conn.connection.destport, p);       
+        tcp_head.SetFlags(flags, p);
+       
         state = conn.state.GetState();
-        
         cerr << endl << endl << "Packet constructed! Looks like:" << endl << p << endl;
-        /*
+        
+       
         switch (state)
         { 
-        
+            case LISTEN:
+            {
+                cerr << "\n Dealing with a LISTEN!\n ";
+                if (IS_SYN(flags))
+                {
+                cerr << "\n Received a syn! Sending syn-ack!\n";
+                
+                //Set last bits of TCP Header
+                tcp_head.SetSeqNum(seq, p);
+                tcp_head.SetAckNum(ack, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                conn.state.SetState(SYN_RCVD);
+                conn.state.last_acked = conn.state.last_sent-1;
+                conn.bTmrActive = true;
+                conn.timeout=Time() + 80;
+                conn.state.SetLastRecvd(seq+1);
+                p.PushBackHeader(tcp_head);
+                MinetSend(mux, p);
+                }
+                break;
+            }
+            case SYN_RCVD:
+            {
+                cerr << "\n Dealing with a LISTEN!\n ";
+            
+                 break;
+            }    
+            
+            default:
+                cerr << "\n Dealing with something else!\n ";
+                break;
         }
-        */
+        
+    }
+    else
+    {
+    cerr <<"\nHas data to send!\n";
+    
     }
 
 } 
@@ -174,6 +222,10 @@ int main(int argc, char * argv[]) {
         
         Packet p;
         unsigned char flags;
+        unsigned char tcp_header_length, ip_header_length;
+        unsigned int seq, ack;
+        short unsigned int data_length;
+        bool has_data;
         TCPHeader tcp_head;
         IPHeader ip_head;     
         MinetReceive(mux,p);
@@ -190,30 +242,75 @@ int main(int argc, char * argv[]) {
         ip_head = p.FindHeader(Headers::IPHeader);
         
         //Analyze the incoming packet, and set find_conn appropriately (for searching through the connection list)
+        //Note the flipped DEST/SRC (the destination from the incoming packet should be the source here and vice-versa)
         ip_head.GetDestIP(find_conn.src);
         ip_head.GetSourceIP(find_conn.dest);
         ip_head.GetProtocol(find_conn.protocol);
         tcp_head.GetSourcePort(find_conn.destport);        
-        tcp_head.GetDestPort(find_conn.srcport);        
+        tcp_head.GetDestPort(find_conn.srcport);       
+
         
+        //Get the sequence and acknowledgment numbers
+        tcp_head.GetSeqNum(seq);
+        tcp_head.GetAckNum(ack);
+        
+        //Get the flags, one of three things we need to know to send response packets
+        tcp_head.GetFlags(flags);
+        
+        //Diagnostic lines 
         cerr << "\n\n\n Presenting the connection we're searching for!:" << find_conn << "\n";
      
+        //Find the matching connection, if it exists
         ConnectionList<TCPState>::iterator conn_search = clist.FindMatching(find_conn);
         
+        //Diagnostic lines
         ConnectionToStateMapping<TCPState> &current_conn2 = *conn_search;   
-        
         cerr << "\n\n\n The connection or lackthereof we found:" << current_conn2.connection << "\n";
         
-            //The connection exists
+            //If the connection exists
             if (conn_search!= clist.end())
             {
-            cerr << endl << endl << endl << "The connection exists!" << endl;
-            
+            cerr << "\n The connection exists!\n" << endl;
             //Conn_search currently points to the ConnectionToStateMapping corresponding to the connection, so initialize a mapping to grab it 
-            //Now have 1 of 4 necessary things to know to use send_packet
+            //Now have two of three necessary things to know to use send_packet
             ConnectionToStateMapping<TCPState> &current_conn = *conn_search;    
-
+            
+            //Find out if the packet has data.            
+            //First set data length to the overall length of the packet
+            /*
+            ip_head.GetTotalLength(data_length);
+            tcp_head.GetHeaderLen(tcp_header_length);            
+            //With no options supported (per project specifications), IP header length is always 20.
+            data_length = data_length - tcp_header_length - 20;
+            cerr << "\n Calculated the data length to be: " << data_length << "\n";
+            */
+            
+            Buffer buf;
+            buf = p.GetPayload();
+            data_length = buf.GetSize();
+            
+            cerr << "\n By payload calculated the data length to be: " << data_length << "\n";
+            
+            //Now we can continue
+            if (data_length == 0)
+                has_data = false;
+            else
+                {
+                //Also add in here the buffering mechanisms into the connection's state
+                has_data = true;
+                }
+                
+            send_packet(current_conn, has_data, flags, mux, sock, seq, ack);    
             }
+            
+            
+            //The connection does not exist
+            else
+            {
+            cerr << "\n The connection does not exist!\n" << endl;
+            
+            }
+            
        
         }
 
