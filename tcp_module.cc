@@ -59,6 +59,7 @@ void analyze_packet (Packet p)
         ip_head.GetSourceIP(source);
         ip_head.GetDestIP(destination);
         
+        cerr << "\n The flags for the packet being analyzed" << flags << "\n";
         
         if (IS_SYN(flags))
         {
@@ -83,26 +84,29 @@ void analyze_packet (Packet p)
             cerr << "\n ACK received! " << endl << "\nThe seqnum is:" << seqnum << "\nThe acknum is:" << acknum << endl;
             cerr << "\nThe source port is:\n" << srcport << endl << "\nThe dest prt is:\n" << destport << endl;
              cerr << "\nThe source IP is:\n" << source << endl << "\nThe dest IP is :\n" << destination << "\nThe rest of the packet is:" << p << endl;     
-           }
-           
-           
+            }
+            else
+            {
+            cerr << "\n Some other kind of packet!\n";
+            }         
            
         }
 
 
 }
 
-//Send packet derives the correct action from the connection and whether or not there is data to be sent
-void send_packet (ConnectionToStateMapping<TCPState> &conn, bool has_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack)
+//Respond_packet derives the correct action from the connection and whether or not there is data to be sent
+void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack)
 {
     //Check whether or not you're sending data. Slightly different loop if so.
-    if (has_data == false)
+    if (get_data == false)
     {
-        cerr <<"\nHas no data to send!\n";
+        cerr <<"\nHas no data to receive!\n";
         Packet p;
         int state;
         TCPHeader tcp_head;
         IPHeader ip_head;
+        unsigned char response_flags;
         
         //Set the IP header
         ip_head.SetSourceIP(conn.connection.src);
@@ -115,42 +119,69 @@ void send_packet (ConnectionToStateMapping<TCPState> &conn, bool has_data, char 
         //Set parts of TCP header
         tcp_head.SetSourcePort(conn.connection.srcport, p);
         tcp_head.SetDestPort(conn.connection.destport, p);       
-        tcp_head.SetFlags(flags, p);
+        // tcp_head.SetFlags(flags, p);
        
         state = conn.state.GetState();
-        cerr << endl << endl << "Packet constructed! Looks like:" << endl << p << endl;
-        
+        cerr << "\n The state: " << state;
+        cerr << "\n Testline for states: " << LISTEN << " " << SYN_RCVD << " " << SYN_SENT << "\n";
        
         switch (state)
         { 
             case LISTEN:
             {
-                cerr << "\n Dealing with a LISTEN!\n ";
+                cerr << "\n In LISTEN state!\n ";
                 if (IS_SYN(flags))
                 {
                 cerr << "\n Received a syn! Sending syn-ack!\n";
                 
                 //Set last bits of TCP Header
-                tcp_head.SetSeqNum(seq, p);
-                tcp_head.SetAckNum(ack, p);
+                tcp_head.SetSeqNum(3333, p);
+                tcp_head.SetAckNum(seq+1, p);
                 tcp_head.SetWinSize((unsigned short)5840, p);
                 tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                SET_ACK(response_flags);
+                SET_SYN(response_flags);
+                tcp_head.SetFlags(response_flags,p);                
                 conn.state.SetState(SYN_RCVD);
                 conn.state.last_acked = conn.state.last_sent-1;
                 conn.bTmrActive = true;
-                conn.timeout=Time() + 80;
+                conn.timeout=Time() + 60;
                 conn.state.SetLastRecvd(seq+1);
                 p.PushBackHeader(tcp_head);
+                cerr << endl << endl << "\n Packet constructed! Looks like:" << endl << p << endl;
                 MinetSend(mux, p);
                 }
                 break;
             }
             case SYN_RCVD:
             {
-                cerr << "\n Dealing with a LISTEN!\n ";
-            
+                cerr << "\n In SYN_RCVD state!\n ";
+                if (IS_SYN(flags))
+                {
+                cerr << "\n Likely error, shouldn't be receiving syn still!\n";
+                }
+                               
+                if (IS_ACK(flags) && (!(IS_SYN(flags))))
+                {
+                cerr << "\n Received ACK! PROPERLY ESTABLISHED. \n";
+                tcp_head.SetSeqNum(seq, p);
+                tcp_head.SetAckNum(ack, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                conn.state.SetState(ESTABLISHED);
+                conn.state.last_acked = conn.state.last_sent-1;
+                conn.bTmrActive = true;
+                conn.timeout=Time() + 60;
+                conn.state.SetLastRecvd(seq+1);                
+                }
                  break;
             }    
+            
+            case ESTABLISHED:
+            {
+                cerr << "\n In ESTABLISHED state!\n";
+                break;
+            }
             
             default:
                 cerr << "\n Dealing with something else!\n ";
@@ -160,8 +191,7 @@ void send_packet (ConnectionToStateMapping<TCPState> &conn, bool has_data, char 
     }
     else
     {
-    cerr <<"\nHas data to send!\n";
-    
+    cerr <<"\nHas data to receive!\n";    
     }
 
 } 
@@ -194,7 +224,7 @@ int main(int argc, char * argv[]) {
     cerr << "tcp_module STUB VERSION handling tcp traffic.......\n";
     MinetSendToMonitor(MinetMonitoringEvent("tcp_module STUB VERSION handling tcp traffic........"));
     MinetEvent event;
-    double timeout = 100;
+    double timeout = 600;
     /////////////////////BEGIN Hard-coded test listener////////////
     const char* addr = "192.168.114.1";
     const char* addr2 = "192.168.42.5";
@@ -228,6 +258,7 @@ int main(int argc, char * argv[]) {
         bool has_data;
         TCPHeader tcp_head;
         IPHeader ip_head;     
+        flags = 0;
         MinetReceive(mux,p);
         
         //Diagnostic lines//
