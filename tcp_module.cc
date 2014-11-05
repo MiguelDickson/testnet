@@ -203,8 +203,9 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 cerr << "\n In ESTABLISHED state!\n";
                 if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)))
                 {
-                tcp_head.SetSeqNum(ack+1, p);
-                tcp_head.SetAckNum(seq+1, p);
+                tcp_head.SetSeqNum(ack, p);
+                tcp_head.SetAckNum(seq + data_length, p);
+                //
                 tcp_head.SetWinSize((unsigned short)5840, p);
                 tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
                 SET_ACK(response_flags);
