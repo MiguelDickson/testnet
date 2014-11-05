@@ -197,6 +197,26 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                  break;
             }    
             
+            case SYN_SENT:
+            {
+                cerr << "\n In SYN_SENT state!\n";
+                if (IS_SYN(flags) && IS_ACK(flags))
+                {
+                tcp_head.SetSeqNum(ack, p);
+                tcp_head.SetAckNum(seq, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);              
+                SET_ACK(response_flags);
+                tcp_head.SetFlags(response_flags,p);    
+                conn.state.SetState(ESTABLISHED);
+                conn.timeout=Time() + 60;
+                p.PushBackHeader(tcp_head);
+                cerr << endl << endl << "\n Packet constructed! Looks like:" << endl << p << endl;
+                MinetSend(mux, p);
+                } 
+            
+            }
+            
             case ESTABLISHED:
             {
                 
@@ -466,7 +486,6 @@ int main(int argc, char * argv[]) {
 						createPacket(connection_state_map, new_packet, flags, 0);
 						
 						// need to send twice, first packed dropped?
-						MinetSend(mux, new_packet);
 						MinetSend(mux, new_packet);
 						
 						connection_state_map.state.SetLastSent(connection_state_map.state.GetLastSent()+1);
