@@ -614,15 +614,19 @@ int main(int argc, char * argv[]) {
 						
 						int total_size = current_conn.state.SendBuffer.GetSize() + request_from_socket.data.GetSize();
 						
+						cerr << "total_size = " << total_size << endl;
+						
 						// okay to send data
 						if (total_size <= current_conn.state.TCP_BUFFER_SIZE)
 						{
+							cerr << "okay to send data" << endl;
 							current_conn.state.SendBuffer.AddBack(request_from_socket.data);
 						}
 						
 						// not enough space in buffer to send data
 						else
 						{
+							cerr << "not enough space in buffer to send data" << endl;
 							response_to_socket.type = STATUS;
 							response_to_socket.connection = request_from_socket.connection;
 							response_to_socket.bytes = 0;
@@ -632,19 +636,19 @@ int main(int argc, char * argv[]) {
 						
 						/*** just send data once for now ***/
 						Buffer buffer = current_conn.state.SendBuffer;
+						
 						int buffer_size = min(buffer.GetSize(), TCP_MAXIMUM_SEGMENT_SIZE);
 						
-						cerr << "\n\nBuffer = \n\n" << buffer << endl;
+						//cerr << "\n\n\n\n\n last_sent = " << current_conn.state.last_sent << endl;
+						//cerr << "\n\n\n\n\n last_acked = " << current_conn.state.last_acked << endl;
+						//cerr << "\n\nBuffer = \n\n" << buffer << endl;
 						
-						new_packet = buffer;
-						SET_PSH(flags);
-						SET_ACK(flags);
+						new_packet = buffer.Extract(0, buffer_size);
 						createPacket(current_conn, new_packet, flags, buffer_size);
 						
-						cerr << "\n\nPacket to send = \n" << new_packet << endl;
+						//cerr << "\n\nPacket to send = \n" << new_packet << endl;
 						
 						MinetSend(mux, new_packet);
-						current_conn.state.SetLastSent(current_conn.state.GetLastSent() + buffer_size);
 						
 						response_to_socket.type = STATUS;
 						response_to_socket.connection = request_from_socket.connection;
