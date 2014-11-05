@@ -213,7 +213,13 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 p.PushBackHeader(tcp_head);
                 cerr << endl << endl << "\n Packet constructed! Looks like:" << endl << p << endl;
                 MinetSend(mux, p);
-                } 
+                }
+				SockRequestResponse srr;
+                srr.connection = conn.connection;
+                srr.error = 0;
+                srr.bytes = 0;
+                srr.type = WRITE;
+                MinetSend(sock, srr);
             
             }
             
@@ -493,7 +499,6 @@ int main(int argc, char * argv[]) {
 						connection_state_map.state.SetLastSent(connection_state_map.state.GetLastSent()+1);
 						clist.push_back(connection_state_map);
 						
-						// send response to socket module
 						response_to_socket.type = STATUS;
 						response_to_socket.connection = request_from_socket.connection;
 						response_to_socket.bytes = 0;
@@ -632,15 +637,15 @@ int main(int argc, char * argv[]) {
 						SET_PSH(flags);
 						SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
-						current_conn.state.GetLastAcked()+1+totalsend);
+						//current_conn.state.GetLastAcked()+1;
 						MinetSend(mux, new_packet);
-						current_conn.state.SetLastSent(current_conn.state.GetLastSent() + size_of_this_send);
+						//current_conn.state.SetLastSent(current_conn.state.GetLastSent() + size_of_this_send);
 						
-						reply.type = STATUS;
-						reply.connection = req.connection;
-						reply.bytes = totalsend;
-						reply.error = EOK;
-						MinetSend(sock, reply);
+						response_to_socket.type = STATUS;
+						response_to_socket.connection = request_from_socket.connection;
+						response_to_socket.bytes = buffer_size;
+						response_to_socket.error = EOK;
+						MinetSend(sock, response_to_socket);
 						
 						break;
 					}
