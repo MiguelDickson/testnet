@@ -260,10 +260,11 @@ void createPacket(ConnectionToStateMapping<TCPState> &connection_map, Packet &ne
 	tcp_header.SetSourcePort(source_port, new_packet);
 	tcp_header.SetDestPort(destination_port, new_packet);
 	tcp_header.SetAckNum(connection_map.state.GetLastRecvd(), new_packet);
+	tcp_header.SetSeqNum(connection_map.state.GetLastAcked()+1, new_packet);
 	tcp_header.SetWinSize(connection_map.state.GetRwnd(), new_packet);
 	tcp_header.SetFlags(flags, new_packet);
-	//tcp_header.SetHeaderLen(TCP_HEADER_BASE_LENGTH, new_packet);
-	//tcp_header.SetUrgentPtr(0, new_packet);
+	tcp_header.SetHeaderLen(TCP_HEADER_BASE_LENGTH, new_packet);
+	tcp_header.SetUrgentPtr(0, new_packet);
 	
 	// we want the TCP header BEHIND the IP header
 	new_packet.PushBackHeader(tcp_header);
@@ -454,18 +455,22 @@ int main(int argc, char * argv[]) {
 				{
 					case CONNECT:
 					{
-						cerr << "CONNECT request" << endl;
+						cerr << "CONNECT request\n\n" << endl;
 						
 						// add new TCP state to connection mapping
 						TCPState new_tcp_state (1, SYN_SENT, 3);
 						ConnectionToStateMapping<TCPState> connection_state_map (request_from_socket.connection, Time()+1, new_tcp_state, false);
-						clist.push_back(connection_state_map);
 						
 						// create rest of packet (ip/tcp headers)
 						SET_SYN(flags);
 						createPacket(connection_state_map, new_packet, flags, 0);
 						
+						// need to send twice, first packed dropped?
 						MinetSend(mux, new_packet);
+						MinetSend(mux, new_packet);
+						
+						connection_state_map.state.SetLastSent(connection_state_map.state.GetLastSent()+1);
+						clist.push_back(connection_state_map);
 						
 						// send response to socket module
 						response_to_socket.type = STATUS;
@@ -556,6 +561,22 @@ int main(int argc, char * argv[]) {
 					case STATUS:
 					{
 						cerr << "STATUS request" << endl;
+						
+						// number of bytes sent
+						int num_bytes = request_from_socket.bytes;
+						c_item->state.RecvBuffer.Erase(0, num_bytes);
+							
+						// there is still data to be written
+						if (c_item->state.RecvBuffer.GetSize() != 0)
+						{
+							response_to_socket.type = WRITE;
+							response_to_socket.connection = request_from_socket.connection;
+							response_to_socket.bytes = c_item->state.RecvBuffer.GetSize();
+							response_to_socket.data = c_item->state.RecvBuffer;
+							response_to_socket.error = EOK;
+							//SockRequestResponse write (WRITE, c_item->connection, , , EOK);
+							MinetSend(sock, response_to_socket);
+						}
 						
 						break;
 					}	
