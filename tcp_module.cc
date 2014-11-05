@@ -330,7 +330,7 @@ int main(int argc, char * argv[]) {
     ConnectionToStateMapping<TCPState> a(testconn, test_time, hardlistener, false);
     cerr << "\n\n\n Presenting the hard-coded connection:" << testconn << "\n";
     clist.push_back(a);
-    //cerr << "\n\n\n Presenting the connection list:" << clist << "\n";
+    ////cerr << "\n\n\n Presenting the connection list:" << clist << "\n";
     /////////////////////END Hard-coded test listener ////////////   
     
     ////////Main Loop//////////////
@@ -487,6 +487,8 @@ int main(int argc, char * argv[]) {
 						
 						// need to send twice, first packed dropped?
 						MinetSend(mux, new_packet);
+						sleep(1);
+						MinetSend(mux, new_packet);
 						
 						connection_state_map.state.SetLastSent(connection_state_map.state.GetLastSent()+1);
 						clist.push_back(connection_state_map);
@@ -559,7 +561,9 @@ int main(int argc, char * argv[]) {
 				cerr << "Connection is already in list\n" ; 
 				cerr << "REQUEST TYPE = " << request_from_socket.type << "\n";
 				
-				int state = c_item->state.GetState();
+				ConnectionToStateMapping<TCPState> &current_conn = *c_item; 
+				
+				int state = current_conn.state.GetState();
 				
 				cerr << "CURRENT STATE = " << state << "\n";
 				
@@ -583,17 +587,17 @@ int main(int argc, char * argv[]) {
 						
 						// number of bytes sent
 						int num_bytes = request_from_socket.bytes;
-						c_item->state.RecvBuffer.Erase(0, num_bytes);
+						current_conn.state.RecvBuffer.Erase(0, num_bytes);
 							
 						// there is still data to be written
-						if (c_item->state.RecvBuffer.GetSize() != 0)
+						if (current_conn.state.RecvBuffer.GetSize() != 0)
 						{
 							response_to_socket.type = WRITE;
 							response_to_socket.connection = request_from_socket.connection;
 							response_to_socket.bytes = c_item->state.RecvBuffer.GetSize();
 							response_to_socket.data = c_item->state.RecvBuffer;
 							response_to_socket.error = EOK;
-							//SockRequestResponse write (WRITE, c_item->connection, , , EOK);
+							
 							MinetSend(sock, response_to_socket);
 						}
 						
@@ -602,6 +606,41 @@ int main(int argc, char * argv[]) {
 					case WRITE:
 					{
 						cerr << "WRITE request" << endl;
+						
+						int total_size = current_conn.state.SendBuffer.GetSize() + request_from_socket.data.GetSize();
+						
+						// okay to send data
+						if (total_size <= current_conn.state.TCP_BUFFER_SIZE)
+						{
+							current_conn.state.SendBuffer.AddBack(request_from_socket.data);
+						}
+						
+						// not enough space in buffer to send data
+						else
+						{
+							response_to_socket.type = STATUS;
+							response_to_socket.connection = request_from_socket.connection;
+							response_to_socket.bytes = 0;
+							response_to_socket.error = EBUF_SPACE;
+							MinetSend(sock, response_to_socket);
+						}
+						
+						/*** just send data once for now ***/
+						Buffer buffer = current_conn.state.SendBuffer;
+						int buffer_size = min(buffer.GetSize(), TCP_MAXIMUM_SEGMENT_SIZE);
+						
+						SET_PSH(flags);
+						SET_ACK(flags);
+						createPacket(current_conn, new_packet, flags, buffer_size);
+						current_conn.state.GetLastAcked()+1+totalsend);
+						MinetSend(mux, new_packet);
+						current_conn.state.SetLastSent(current_conn.state.GetLastSent() + size_of_this_send);
+						
+						reply.type = STATUS;
+						reply.connection = req.connection;
+						reply.bytes = totalsend;
+						reply.error = EOK;
+						MinetSend(sock, reply);
 						
 						break;
 					}
