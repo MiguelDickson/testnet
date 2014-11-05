@@ -644,6 +644,9 @@ int main(int argc, char * argv[]) {
 						//cerr << "\n\nBuffer = \n\n" << buffer << endl;
 						
 						new_packet = buffer.Extract(0, buffer_size);
+						
+						//SET_PSH(flags);
+						//SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
 						
 						//cerr << "\n\nPacket to send = \n" << new_packet << endl;
