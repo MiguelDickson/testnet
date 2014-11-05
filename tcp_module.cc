@@ -108,17 +108,17 @@ void analyze_packet (Packet p)
 }
 
 //Respond_packet derives the correct action from the connection and whether or not there is data to be sent
-void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack)
+void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack, Buffer b, short unsigned int data_length)
 {
        
         cerr <<"\nIn respond_packet!\n";
         Packet p;
-        Buffer b;
+        //Buffer b;
         int state;
         TCPHeader tcp_head;
         IPHeader ip_head;
         unsigned char response_flags;
-        
+                
         //Set the IP header
         ip_head.SetSourceIP(conn.connection.src);
         ip_head.SetDestIP(conn.connection.dest);
@@ -155,7 +155,7 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 tcp_head.SetFlags(response_flags,p);                
                 conn.state.SetState(SYN_RCVD);
                 conn.state.last_acked = conn.state.last_sent-1;
-                conn.bTmrActive = true;
+                //conn.bTmrActive = true;
                 conn.timeout=Time() + 60;
                 conn.state.SetLastRecvd(seq+1);
                 p.PushBackHeader(tcp_head);
@@ -199,9 +199,34 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             
             case ESTABLISHED:
             {
-            
-            
+                
                 cerr << "\n In ESTABLISHED state!\n";
+                if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)))
+                {
+                tcp_head.SetSeqNum(ack+1, p);
+                tcp_head.SetAckNum(seq+1, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                SET_ACK(response_flags);
+                tcp_head.SetFlags(response_flags,p);   
+                conn.state.last_acked = conn.state.last_sent-1;
+                conn.state.SetLastRecvd(seq+1);
+                p.PushBackHeader(tcp_head);
+                cerr << "\n \n \n Ack-packet response to data constructed! Looks like:\n" << p;
+                MinetSend(mux, p);
+                SockRequestResponse srr(WRITE, conn.connection, b, data_length, EOK);
+                MinetSend(sock, srr);
+                
+                }
+                else
+                {
+                    if (IS_FIN(flags))
+                    {
+                    conn.state.SetLastRecvd(seq+1);             
+                 
+                    }
+                }
+                                
                 break;
             }
             
@@ -388,7 +413,7 @@ int main(int argc, char * argv[]) {
                 has_data = true;
                 }
                 
-            respond_packet(current_conn, has_data, flags, mux, sock, seq, ack);    
+            respond_packet(current_conn, has_data, flags, mux, sock, seq, ack, buf, data_length);    
             }
             
             
