@@ -356,19 +356,20 @@ int main(int argc, char * argv[]) {
             
             //Find out if the packet has data.            
             //First set data length to the overall length of the packet
-            /*
+            
             ip_head.GetTotalLength(data_length);
+            ip_head.GetHeaderLength(ip_header_length);
             tcp_head.GetHeaderLen(tcp_header_length);            
             //With no options supported (per project specifications), IP header length is always 20.
-            data_length = data_length - tcp_header_length - 20;
+            data_length = data_length - (ip_header_length * 4) - (tcp_header_length * 4);
             cerr << "\n Calculated the data length to be: " << data_length << "\n";
-            */
+           
             
             Buffer buf;
             buf = p.GetPayload();
-            data_length = buf.GetSize();
+            //data_length = buf.GetSize();
             
-            cerr << "\n By payload calculated the data length to be: " << data_length << "\n";
+            // cerr << "\n By payload calculated the data length to be: " << data_length << "\n";
             
             //Now we can continue
             if (data_length == 0)
