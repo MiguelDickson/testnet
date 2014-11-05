@@ -203,7 +203,7 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 if (IS_SYN(flags) && IS_ACK(flags))
                 {
                 tcp_head.SetSeqNum(ack, p);
-                tcp_head.SetAckNum(seq, p);
+                tcp_head.SetAckNum(seq+1, p);
                 tcp_head.SetWinSize((unsigned short)5840, p);
                 tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);              
                 SET_ACK(response_flags);
@@ -634,12 +634,17 @@ int main(int argc, char * argv[]) {
 						Buffer buffer = current_conn.state.SendBuffer;
 						int buffer_size = min(buffer.GetSize(), TCP_MAXIMUM_SEGMENT_SIZE);
 						
+						cerr << "\n\nBuffer = \n\n" << buffer << endl;
+						
+						new_packet = buffer;
 						SET_PSH(flags);
 						SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
-						//current_conn.state.GetLastAcked()+1;
+						
+						cerr << "\n\nPacket to send = \n" << new_packet << endl;
+						
 						MinetSend(mux, new_packet);
-						//current_conn.state.SetLastSent(current_conn.state.GetLastSent() + size_of_this_send);
+						current_conn.state.SetLastSent(current_conn.state.GetLastSent() + buffer_size);
 						
 						response_to_socket.type = STATUS;
 						response_to_socket.connection = request_from_socket.connection;
