@@ -213,7 +213,36 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
         
 } 
 
-
+void createPacket(ConnectionToStateMapping<TCPState> &connection_map, Packet &new_packet, unsigned char flags, int data_size)
+{
+	IPHeader ip_header;
+	TCPHeader tcp_header;
+	IPAddress source = connection_map.connection.src;
+	IPAddress destination = connection_map.connection.dest;
+	unsigned short source_port = connection_map.connection.srcport;
+	unsigned short destination_port = connection_map.connection.destport;
+	
+	// create the IP header
+	ip_header.SetProtocol(IP_PROTO_TCP);
+	ip_header.SetSourceIP(source);
+	ip_header.SetDestIP(destination);
+	ip_header.SetTotalLength(data_size + TCP_HEADER_BASE_LENGTH + IP_HEADER_BASE_LENGTH);
+	
+	// push IP header onto packet
+	new_packet.PushFrontHeader(ip_header);
+	
+	// create the TCP header
+	tcp_header.SetSourcePort(source_port, new_packet);
+	tcp_header.SetDestPort(destination_port, new_packet);
+	tcp_header.SetAckNum(connection_map.state.GetLastRecvd(), new_packet);
+	tcp_header.SetWinSize(connection_map.state.GetRwnd(), new_packet);
+	tcp_header.SetFlags(flags, new_packet);
+	//tcp_header.SetHeaderLen(TCP_HEADER_BASE_LENGTH, new_packet);
+	//tcp_header.SetUrgentPtr(0, new_packet);
+	
+	// we want the TCP header BEHIND the IP header
+	new_packet.PushBackHeader(tcp_header);
+}
 
 int main(int argc, char * argv[]) {
     
@@ -364,9 +393,181 @@ int main(int argc, char * argv[]) {
             
        
         }
-
-	    if (event.handle == sock) {
+		
 		// socket request or response has arrived
+	    if (event.handle == sock)
+		{
+			SockRequestResponse request_from_socket;
+			SockRequestResponse response_to_socket;
+			
+			MinetReceive(sock, request_from_socket);
+			
+			unsigned char flags = 0;
+			
+			Packet new_packet;
+			
+			cerr << request_from_socket << endl;
+			
+			// this iterates over the connection list to see if the connection is in it
+			ConnectionList<TCPState>::iterator c_item = clist.FindMatching(request_from_socket.connection);
+			
+			// connection is not in the connection list
+			if (c_item == clist.end())
+			{
+				cerr << "Connection is NOT in list\n";
+				cerr << "REQUEST TYPE = " << request_from_socket.type << endl;
+				switch (request_from_socket.type)
+				{
+					case CONNECT:
+					{
+						cerr << "CONNECT request" << endl;
+						
+						// add new TCP state to connection mapping
+						TCPState new_tcp_state (1, SYN_SENT, 3);
+						ConnectionToStateMapping<TCPState> connection_state_map (request_from_socket.connection, Time()+1, new_tcp_state, false);
+						clist.push_back(connection_state_map);
+						
+						// create rest of packet (ip/tcp headers)
+						SET_SYN(flags);
+						createPacket(connection_state_map, new_packet, flags, 0);
+						
+						MinetSend(mux, new_packet);
+						
+						// send response to socket module
+						response_to_socket.type = STATUS;
+						response_to_socket.connection = request_from_socket.connection;
+						response_to_socket.bytes = 0;
+						response_to_socket.error = EOK;
+						
+						MinetSend(sock, response_to_socket);
+						
+						break;
+					}
+					case ACCEPT:
+					{	
+						cerr << "ACCEPT request" << endl;
+						
+						// add new TCP state to connection mapping
+						TCPState new_tcp_state (1, LISTEN, 3);
+						ConnectionToStateMapping<TCPState> connection_state_map(request_from_socket.connection, Time()+1, new_tcp_state, false);
+						clist.push_back(connection_state_map);
+						
+						// send response to socket module
+						response_to_socket.type = STATUS;
+						response_to_socket.connection = request_from_socket.connection;
+						response_to_socket.bytes = 0;
+						response_to_socket.error = EOK;
+						
+						MinetSend(sock, response_to_socket);
+						
+						break;
+					}	
+					case STATUS:
+					{
+						cerr << "STATUS request" << endl;
+						
+						break;
+					}	
+					case WRITE:
+					{
+						cerr << "WRITE request" << endl;
+						
+						break;
+					}
+					case FORWARD:
+					{
+						cerr << "FORWARD request" << endl;
+						
+						break;
+					}
+					case CLOSE:
+					{
+						cerr << "CLOSE request" << endl;
+						
+						break;
+					}
+					default:
+					{
+						cerr << "default case ???" << endl;
+						
+						break;
+					}
+				}
+			}
+			
+			// connection is already in the connection list
+			else
+			{
+				cerr << "Connection is already in list\n" ; 
+				cerr << "REQUEST TYPE = " << request_from_socket.type << "\n";
+				
+				int state = c_item->state.GetState();
+				
+				cerr << "CURRENT STATE = " << state << "\n";
+				
+				switch (request_from_socket.type)
+				{
+					case CONNECT:
+					{
+						cerr << "CONNECT request" << endl;
+						
+						break;
+					}
+					case ACCEPT:
+					{	
+						cerr << "ACCEPT request" << endl;
+						
+						break;
+					}	
+					case STATUS:
+					{
+						cerr << "STATUS request" << endl;
+						
+						break;
+					}	
+					case WRITE:
+					{
+						cerr << "WRITE request" << endl;
+						
+						break;
+					}
+					case FORWARD:
+					{
+						cerr << "FORWARD request" << endl;
+						
+						break;
+					}
+					case CLOSE:
+					{
+						cerr << "CLOSE request" << endl;
+						
+						if (state == ESTABLISHED)
+						{
+							
+						}
+						else if (state == SYN_SENT)
+						{
+							
+						}
+						else if (state == SYN_RCVD)
+						{
+							
+						}
+						else if (state == CLOSE_WAIT)
+						{
+							
+						}
+						
+						break;
+					}
+					default:
+					{
+						cerr << "default case ???" << endl;
+						
+						break;
+					}
+				}
+			}
 	    }
 	}
 
