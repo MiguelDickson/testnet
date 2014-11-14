@@ -180,7 +180,7 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 //tcp_head.SetWinSize((unsigned short)5840, p);
                 //tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
                 conn.state.SetState(ESTABLISHED);
-                //conn.state.last_acked = conn.state.last_sent-1;
+                conn.state.last_acked = conn.state.last_sent-1;
                 conn.bTmrActive = true;
                 conn.timeout=Time() + 60;
                 conn.state.SetLastRecvd(seq+1);  
@@ -209,6 +209,7 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 SET_ACK(response_flags);
                 tcp_head.SetFlags(response_flags,p);    
                 conn.state.SetState(ESTABLISHED);
+                conn.state.last_acked = conn.state.last_sent-1;
                 conn.timeout=Time() + 60;
                 p.PushBackHeader(tcp_head);
                 cerr << endl << endl << "\n Packet constructed! Looks like:" << endl << p << endl;
@@ -271,7 +272,7 @@ void createPacket(ConnectionToStateMapping<TCPState> &connection_map, Packet &ne
 	IPAddress source = connection_map.connection.src;
 	IPAddress destination = connection_map.connection.dest;
 	unsigned short source_port = connection_map.connection.srcport;
-	unsigned short destination_port = connection_map.connection.destport;
+     	unsigned short destination_port = connection_map.connection.destport;
 	
 	// create the IP header
 	ip_header.SetProtocol(IP_PROTO_TCP);
@@ -286,7 +287,7 @@ void createPacket(ConnectionToStateMapping<TCPState> &connection_map, Packet &ne
 	tcp_header.SetSourcePort(source_port, new_packet);
 	tcp_header.SetDestPort(destination_port, new_packet);
 	tcp_header.SetAckNum(connection_map.state.GetLastRecvd(), new_packet);
-	tcp_header.SetSeqNum(connection_map.state.GetLastAcked()+1, new_packet);
+	tcp_header.SetSeqNum(connection_map.state.last_sent, new_packet);
 	tcp_header.SetWinSize(connection_map.state.GetRwnd(), new_packet);
 	tcp_header.SetFlags(flags, new_packet);
 	tcp_header.SetHeaderLen(TCP_HEADER_BASE_LENGTH, new_packet);
@@ -639,19 +640,19 @@ int main(int argc, char * argv[]) {
 						
 						int buffer_size = min(buffer.GetSize(), TCP_MAXIMUM_SEGMENT_SIZE);
 						
-						//cerr << "\n\n\n\n\n last_sent = " << current_conn.state.last_sent << endl;
-						//cerr << "\n\n\n\n\n last_acked = " << current_conn.state.last_acked << endl;
+						cerr << "\n\n\n\n\n last_sent = " << current_conn.state.last_sent << endl;
+						cerr << "\n\n\n\n\n last_acked = " << current_conn.state.last_acked << endl;
 						//cerr << "\n\nBuffer = \n\n" << buffer << endl;
 						
 						new_packet = buffer.Extract(0, buffer_size);
-						
-						//SET_PSH(flags);
-						//SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
+						
 						
 						//cerr << "\n\nPacket to send = \n" << new_packet << endl;
 						
 						MinetSend(mux, new_packet);
+
+						current_conn.state.last_sent = current_conn.state.last_sent+buffer_size;
 						
 						response_to_socket.type = STATUS;
 						response_to_socket.connection = request_from_socket.connection;
