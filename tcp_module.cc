@@ -226,9 +226,9 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             case ESTABLISHED:
             {
                 cerr << "\n In ESTABLISHED state!\n";
-                if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)))
+                if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)) && (IS_PSH(flags)))
                 {
-					cerr << "if\n";
+					cerr << "Received data!";
 					tcp_head.SetSeqNum(ack, p);
 					tcp_head.SetAckNum(seq + data_length, p);
 					//
@@ -247,11 +247,26 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 }
                 else
                 {
-					cerr << "else\n";
-                    if (IS_FIN(flags))
+                    if (IS_ACK(flags))
                     {
-                    conn.state.SetLastRecvd(seq+1);             
-                 
+                    conn.state.SetLastRecvd(seq+data_length);
+                    cerr << "Received acknowledgment of data sent";                
+                    }
+					
+                    else if (IS_FIN(flags))
+                    {
+                    conn.state.SetLastRecvd(seq+1);        
+                    tcp_head.SetSeqNum(ack, p);
+                    tcp_head.SetAckNum(seq+1, p);
+                    tcp_head.SetWinSize((unsigned short)5840, p);
+                    tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                    SET_ACK(response_flags);
+                    tcp_head.SetFlags(response_flags,p);
+                    conn.state.SetState(CLOSE_WAIT);
+                    conn.state.last_acked = conn.state.last_sent-1;
+                    conn.state.SetLastRecvd(seq+1);
+                    p.PushBackHeader(tcp_head);
+                    MinetSend(mux, p);    
                     }
                 }
                                 
