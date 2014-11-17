@@ -108,7 +108,8 @@ void analyze_packet (Packet p)
 }
 
 //Respond_packet derives the correct action from the connection and whether or not there is data to be sent
-void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack, Buffer b, short unsigned int data_length)
+//Return true if this connection should be killed after response. 
+bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, char flags, const MinetHandle &mux, const MinetHandle &sock, unsigned int seq, unsigned int ack, Buffer b, short unsigned int data_length)
 {
        
         cerr <<"\nIn respond_packet!\n";
@@ -247,9 +248,10 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 }
                 else
                 {
-                    if (IS_ACK(flags))
+                    if (IS_ACK(flags) && !IS_FIN(flags))
                     {
-                    conn.state.SetLastRecvd(seq+data_length);
+                    conn.state.SetLastRecvd(seq);
+                    conn.state.last_acked = ack;
                     cerr << "Received acknowledgment of data sent";                
                     }
 					
@@ -273,11 +275,75 @@ void respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 break;
             }
             
+            case FIN_WAIT1:
+            {
+                if (IS_FIN(flags) && IS_ACK(flags))
+                {
+                conn.state.SetState(FIN_WAIT2);
+                conn.state.SetLastRecvd(seq+1);
+                conn.state.last_acked = ack;
+                tcp_head.SetSeqNum(ack, p);
+                tcp_head.SetAckNum(seq+1, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                SET_ACK(response_flags);
+                tcp_head.SetFlags(response_flags,p);     
+                p.PushBackHeader(tcp_head);
+                MinetSend(mux,p);
+                }
+                break;
+            }
+            
+            case FIN_WAIT2:
+            {
+                if (IS_ACK(flags))
+                {
+                conn.state.SetLastRecvd(seq+1);
+                conn.state.last_acked = ack;
+                tcp_head.SetSeqNum(ack, p);
+                tcp_head.SetAckNum(seq+1, p);
+                tcp_head.SetWinSize((unsigned short)5840, p);
+                tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+                SET_ACK(response_flags);
+                tcp_head.SetFlags(response_flags,p);     
+                p.PushBackHeader(tcp_head);
+                MinetSend(mux,p);
+                
+                //Send the close to the socket
+                SockRequestRespnse srr;
+                srr.type = CLOSE;
+                srr.connection = conn.connection;
+                srr.bytes = 0;
+                srr.error = EOK;
+                MinetSend(sock, srr);
+                
+                //Return true to kill connection after response actions
+                return true;
+                }
+            }
+            
+            case CLOSE_WAIT:
+            {
+                if (IS_ACK(flags))
+                {
+                //Send the close to the socket
+                SockRequestRespnse srr;
+                srr.type = CLOSE;
+                srr.connection = conn.connection;
+                srr.bytes = 0;
+                srr.error = EOK;
+                MinetSend(sock, srr);
+                
+                //Return true to kill connection after response action
+                return true;
+                }
+            }
+            
             default:
                 cerr << "\n Dealing with something else!\n ";
                 break;
         }
-        
+        return false;
 } 
 
 void createPacket(ConnectionToStateMapping<TCPState> &connection_map, Packet &new_packet, unsigned char flags, int data_size)
@@ -342,7 +408,7 @@ int main(int argc, char * argv[]) {
     MinetEvent event;
     double timeout = 600;
     /////////////////////BEGIN Hard-coded test listener////////////
-    const char* addr = "192.168.114.1";
+    const char* addr = "192.168.106.2";
     const char* addr2 = "192.168.42.5";
     TCPState hardlistener(0, 1, 2);
     IPAddress testaddr(addr);
@@ -456,8 +522,11 @@ int main(int argc, char * argv[]) {
                 //Also add in here the buffering mechanisms into the connection's state
                 has_data = true;
                 }
-                
-            respond_packet(current_conn, has_data, flags, mux, sock, seq, ack, buf, data_length);    
+           
+            bool kill_connect = false;           
+            kill_connect = respond_packet(current_conn, has_data, flags, mux, sock, seq, ack, buf, data_length);
+            if (kill_connect == true)
+                clist.erase(current_conn);
             }
             
             
