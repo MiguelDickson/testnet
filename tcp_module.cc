@@ -310,7 +310,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 MinetSend(mux,p);
                 
                 //Send the close to the socket
-                SockRequestRespnse srr;
+                SockRequestResponse srr;
                 srr.type = CLOSE;
                 srr.connection = conn.connection;
                 srr.bytes = 0;
@@ -319,6 +319,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 
                 //Return true to kill connection after response actions
                 return true;
+                break;
                 }
             }
             
@@ -327,15 +328,15 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 if (IS_ACK(flags))
                 {
                 //Send the close to the socket
-                SockRequestRespnse srr;
+                SockRequestResponse srr;
                 srr.type = CLOSE;
                 srr.connection = conn.connection;
                 srr.bytes = 0;
                 srr.error = EOK;
-                MinetSend(sock, srr);
-                
+                MinetSend(sock, srr);                
                 //Return true to kill connection after response action
                 return true;
+                break;
                 }
             }
             
@@ -526,7 +527,7 @@ int main(int argc, char * argv[]) {
             bool kill_connect = false;           
             kill_connect = respond_packet(current_conn, has_data, flags, mux, sock, seq, ack, buf, data_length);
             if (kill_connect == true)
-                clist.erase(current_conn);
+                clist.erase(conn_search);
             }
             
             
