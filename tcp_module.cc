@@ -185,6 +185,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 conn.bTmrActive = true;
                 conn.timeout=Time() + 60;
                 conn.state.SetLastRecvd(seq+1);  
+                /*
                 if (get_data == true)
                     {
                     char *bufstring;
@@ -192,10 +193,16 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                     unsigned offset =0;
                     conn.state.RecvBuffer.GetData(bufstring, size, offset);
                     cerr << "\n Writing the following buffer to socket!: " << *bufstring << "\n";  
-                        
                     }
+                */
+                SockRequestResponse srr;
+                srr.connection = conn.connection;
+                srr.error = 0;
+                srr.bytes = 0;
+                srr.type = WRITE;
+                MinetSend(sock, srr);                
+                break;
                 }
-                 break;
             }    
             
             case SYN_SENT:
@@ -215,12 +222,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 cerr << endl << endl << "\n Packet constructed! Looks like:" << endl << p << endl;
                 MinetSend(mux, p);
                 }
-				SockRequestResponse srr;
-                srr.connection = conn.connection;
-                srr.error = 0;
-                srr.bytes = 0;
-                srr.type = WRITE;
-                MinetSend(sock, srr);
+				
             
             }
             
@@ -237,7 +239,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
 					tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
 					SET_ACK(response_flags);
 					tcp_head.SetFlags(response_flags,p);   
-					conn.state.last_acked = conn.state.last_sent;
+					conn.state.last_acked = conn.state.last_sent-1;
 					p.PushBackHeader(tcp_head);
 					cerr << "\n \n \n Ack-packet response to data constructed! Looks like:\n" << p;
 					MinetSend(mux, p);
