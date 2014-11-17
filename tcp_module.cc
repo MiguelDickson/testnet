@@ -227,7 +227,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             case ESTABLISHED:
             {
                 cerr << "\n In ESTABLISHED state!\n";
-                if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)) && (IS_PSH(flags)))
+                if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)))
                 {
 					cerr << "\nReceived data! While ESTABLISHED!";
 					tcp_head.SetSeqNum(ack, p);
@@ -640,7 +640,13 @@ int main(int argc, char * argv[]) {
 					}
 					case CLOSE:
 					{
-						cerr << "CLOSE request" << endl;
+						cerr << "CLOSE NEW" << endl;
+						
+						response_to_socket.type = STATUS;
+						response_to_socket.connection = request_from_socket.connection;
+						response_to_socket.bytes = 0;
+						response_to_socket.error = ENOMATCH;
+						MinetSend(sock, response_to_socket);
 						
 						break;
 					}
@@ -745,7 +751,7 @@ int main(int argc, char * argv[]) {
 						cerr << "Buffer size = " << buffer_size << endl;
 						cerr << "Buffer after constructing new packet= " << buffer << endl;
                         
-                        cerr << "Buffer inside new_packet= " << new_packet.payload << endl;
+                        cerr << "Buffer inside new_packet= " << new_packet << endl;
 						
 						//SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
@@ -773,23 +779,39 @@ int main(int argc, char * argv[]) {
 					}
 					case CLOSE:
 					{
-						cerr << "CLOSE request" << endl;
+						cerr << "CLOSE OLD" << endl;
 						
 						if (state == ESTABLISHED)
 						{
+							cerr << "ESTABLISHED" << endl;
 							
+							current_conn.state.SetState(FIN_WAIT1);
+							current_conn.state.SetLastSent(current_conn.state.GetLastSent() + 1);
+							
+							SET_FIN(flags);
+							createPacket(current_conn, new_packet, flags, 0);
+							
+							MinetSend(mux, new_packet);
+						
+							response_to_socket.type = STATUS;
+							response_to_socket.connection = request_from_socket.connection;
+							response_to_socket.bytes = 0;
+							response_to_socket.error = EOK;
+							
+							MinetSend(sock, response_to_socket);
 						}
-						else if (state == SYN_SENT)
+						else
 						{
+							cerr << "ELSE" << endl;
+							cerr << "STATE = " << state << endl;
+							response_to_socket.type = STATUS;
+							response_to_socket.connection = request_from_socket.connection;
+							response_to_socket.bytes = 0;
+							response_to_socket.error = EOK;
 							
-						}
-						else if (state == SYN_RCVD)
-						{
+							MinetSend(sock, response_to_socket);
 							
-						}
-						else if (state == CLOSE_WAIT)
-						{
-							
+							clist.erase(c_item);
 						}
 						
 						break;
