@@ -208,7 +208,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 tcp_head.SetWinSize((unsigned short)5840, p);
                 tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);              
                 SET_ACK(response_flags);
-                tcp_head.SetFlags(response_flags,p);    
+                tcp_head.SetFlags(response_flags,p);
                 conn.state.SetState(ESTABLISHED);
                 conn.timeout=Time() + 60;
                 p.PushBackHeader(tcp_head);
@@ -238,7 +238,6 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
 					SET_ACK(response_flags);
 					tcp_head.SetFlags(response_flags,p);   
 					conn.state.last_acked = conn.state.last_sent;
-					conn.state.SetLastRecvd(seq+1);
 					p.PushBackHeader(tcp_head);
 					cerr << "\n \n \n Ack-packet response to data constructed! Looks like:\n" << p;
 					MinetSend(mux, p);
@@ -249,27 +248,28 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 else
                 {
                     if (IS_ACK(flags) && !IS_FIN(flags))
-                    {
-                  //  conn.state.SetLastRecvd(seq);
-                  //   conn.state.last_acked = ack;
-                    cerr << "\nReceived acknowledgment of data sent while ESTABLISHED!";                
-                    }
+					{
+						cerr << "IS_ACK\n";
+
+						conn.state.SetLastRecvd(seq+1);
+						conn.state.SetLastAcked(ack);
+					} 	
 					
                     else if (IS_FIN(flags))
                     {
-                    cerr <<"\nReceived FIN while ESTABLISHED!";
-                    conn.state.SetLastRecvd(seq+1);        
-                    tcp_head.SetSeqNum(ack, p);
-                    tcp_head.SetAckNum(seq+1, p);
-                    tcp_head.SetWinSize((unsigned short)5840, p);
-                    tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
-                    SET_ACK(response_flags);
-                    tcp_head.SetFlags(response_flags,p);
-                    conn.state.SetState(CLOSE_WAIT);
-                    conn.state.last_acked = conn.state.last_sent-1;
-                    conn.state.SetLastRecvd(seq+1);
-                    p.PushBackHeader(tcp_head);
-                    MinetSend(mux, p);    
+						cerr <<"\nReceived FIN while ESTABLISHED!";
+						conn.state.SetLastRecvd(seq+1);        
+						tcp_head.SetSeqNum(ack, p);
+						tcp_head.SetAckNum(seq+1, p);
+						tcp_head.SetWinSize((unsigned short)5840, p);
+						tcp_head.SetHeaderLen(TCP_HEADER_BASE_LENGTH, p);
+						SET_ACK(response_flags);
+						tcp_head.SetFlags(response_flags,p);
+						conn.state.SetState(CLOSE_WAIT);
+						conn.state.last_acked = conn.state.last_sent-1;
+						conn.state.SetLastRecvd(seq+1);
+						p.PushBackHeader(tcp_head);
+						MinetSend(mux, p);    
                     }
                 }
                                 
