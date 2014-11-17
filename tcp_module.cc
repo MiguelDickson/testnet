@@ -229,7 +229,7 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 cerr << "\n In ESTABLISHED state!\n";
                 if (!(IS_FIN(flags)) && !(IS_SYN(flags)) && !(IS_RST(flags)) && (IS_PSH(flags)))
                 {
-					cerr << "Received data!";
+					cerr << "\nReceived data! While ESTABLISHED!";
 					tcp_head.SetSeqNum(ack, p);
 					tcp_head.SetAckNum(seq + data_length, p);
 					//
@@ -250,13 +250,14 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
                 {
                     if (IS_ACK(flags) && !IS_FIN(flags))
                     {
-                    conn.state.SetLastRecvd(seq);
-                    conn.state.last_acked = ack;
-                    cerr << "Received acknowledgment of data sent";                
+                  //  conn.state.SetLastRecvd(seq);
+                  //   conn.state.last_acked = ack;
+                    cerr << "\nReceived acknowledgment of data sent while ESTABLISHED!";                
                     }
 					
                     else if (IS_FIN(flags))
                     {
+                    cerr <<"\nReceived FIN while ESTABLISHED!";
                     conn.state.SetLastRecvd(seq+1);        
                     tcp_head.SetSeqNum(ack, p);
                     tcp_head.SetAckNum(seq+1, p);
@@ -277,8 +278,10 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             
             case FIN_WAIT1:
             {
+                cerr <<"\nIn FIN_WAIT!";
                 if (IS_FIN(flags) && IS_ACK(flags))
                 {
+                cerr <<"\nIn FIN_WAIT and received FIN_ACK!";
                 conn.state.SetState(FIN_WAIT2);
                 conn.state.SetLastRecvd(seq+1);
                 conn.state.last_acked = ack;
@@ -296,8 +299,10 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             
             case FIN_WAIT2:
             {
+                cerr <<"\nIn FIN_WAIT2!";
                 if (IS_ACK(flags))
                 {
+                cerr <<"\nIn FIN_WAIT2 and received ACK!";
                 conn.state.SetLastRecvd(seq+1);
                 conn.state.last_acked = ack;
                 tcp_head.SetSeqNum(ack, p);
@@ -325,8 +330,10 @@ bool respond_packet (ConnectionToStateMapping<TCPState> &conn, bool get_data, ch
             
             case CLOSE_WAIT:
             {
+                cerr <<"\nIn CLOSE_WAIT!";
                 if (IS_ACK(flags))
                 {
+                cerr <<"\nIn CLOSE_WAIT and received ACK!";
                 //Send the close to the socket
                 SockRequestResponse srr;
                 srr.type = CLOSE;
@@ -723,9 +730,12 @@ int main(int argc, char * argv[]) {
 						// get buffer data
 						Buffer buffer = current_conn.state.SendBuffer;
 						
+                        cerr << "Buffer before any extraction = " << buffer << endl;
+                        
 						// remove old, already send data
 						buffer.ExtractFront(current_conn.state.last_sent - current_conn.state.last_acked); 
-						
+						cerr << "Buffer after extracting old data = " << buffer << endl;
+                        
 						int buffer_size = min(buffer.GetSize(), TCP_MAXIMUM_SEGMENT_SIZE);
 						
 						new_packet = buffer.Extract(0, buffer_size);
@@ -733,7 +743,9 @@ int main(int argc, char * argv[]) {
 						cerr << "\n\n\n\nlast_sent = " << current_conn.state.last_sent << endl;
 						cerr << "last_acked = " << current_conn.state.last_acked << endl;
 						cerr << "Buffer size = " << buffer_size << endl;
-						cerr << "Buffer = " << buffer << endl;
+						cerr << "Buffer after constructing new packet= " << buffer << endl;
+                        
+                        cerr << "Buffer inside new_packet= " << new_packet.payload << endl;
 						
 						//SET_ACK(flags);
 						createPacket(current_conn, new_packet, flags, buffer_size);
